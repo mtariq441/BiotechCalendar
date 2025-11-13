@@ -13,11 +13,9 @@ import Watchlist from "@/pages/watchlist";
 import NotFound from "@/pages/not-found";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
-
   return (
     <Switch>
-      <Route path="/" component={isAuthenticated ? Calendar : Landing} />
+      <Route path="/" component={Calendar} />
       <Route path="/calendar" component={Calendar} />
       <Route path="/event/:id" component={EventDetail} />
       <Route path="/company/:id" component={CompanyDetail} />
@@ -28,20 +26,22 @@ function Router() {
 }
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>
       <Toaster />
-      {isAuthenticated ? (
-        <Layout>
-          <Router />
-        </Layout>
-      ) : (
-        <div className="min-h-screen">
-          <Router />
-        </div>
-      )}
+      <Layout>
+        <Router />
+      </Layout>
     </TooltipProvider>
   );
 }
