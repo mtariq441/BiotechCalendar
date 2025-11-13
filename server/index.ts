@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { seedDatabase } from "./seed";
+import { initializeDatabase } from "./db";
 
 const app = express();
 
@@ -65,6 +66,15 @@ app.use((req, res, next) => {
     await setupVite(app, server);
   } else {
     serveStatic(app);
+  }
+
+  // Initialize database schema
+  try {
+    await initializeDatabase();
+    log("Database initialized successfully");
+  } catch (error) {
+    log("Warning: Database initialization failed");
+    console.error(error);
   }
 
   // Seed database on startup (only in development)

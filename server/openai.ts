@@ -1,9 +1,9 @@
-// Referenced from javascript_openai blueprint
 import OpenAI from "openai";
 import type { Event, Company, Trial, Scenario } from "@shared/schema";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = process.env.OPENAI_API_KEY 
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  : null;
 
 export async function generateEventAnalysis(
   event: Event,
@@ -63,6 +63,10 @@ Respond ONLY with valid JSON matching this structure:
   "confidence": 0.78
 }`;
 
+  if (!openai) {
+    throw new Error("OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.");
+  }
+
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-5",
@@ -82,7 +86,6 @@ Respond ONLY with valid JSON matching this structure:
 
     const result = JSON.parse(response.choices[0].message.content || "{}");
 
-    // Generate 30-day price paths if not provided
     const baseDate = new Date(event.dateUtc);
     const scenarios: Scenario[] = result.scenarios.map((scenario: any) => {
       if (!scenario.pricePath || scenario.pricePath.length === 0) {
