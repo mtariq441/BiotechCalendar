@@ -49,6 +49,7 @@ export interface IStorage {
 
   // Watchlist operations
   getWatchlistItems(userId: string): Promise<WatchlistItem[]>;
+  getWatchlistItem(userId: string, eventId: string): Promise<WatchlistItem | undefined>;
   createWatchlistItem(item: InsertWatchlistItem): Promise<WatchlistItem>;
   deleteWatchlistItem(id: string): Promise<void>;
 }
@@ -167,6 +168,14 @@ export class DatabaseStorage implements IStorage {
   // Watchlist operations
   async getWatchlistItems(userId: string): Promise<WatchlistItem[]> {
     return await db.select().from(watchlistItems).where(eq(watchlistItems.userId, userId)).orderBy(desc(watchlistItems.createdAt));
+  }
+
+  async getWatchlistItem(userId: string, eventId: string): Promise<WatchlistItem | undefined> {
+    const [item] = await db
+      .select()
+      .from(watchlistItems)
+      .where(and(eq(watchlistItems.userId, userId), eq(watchlistItems.eventId, eventId)));
+    return item || undefined;
   }
 
   async createWatchlistItem(itemData: InsertWatchlistItem): Promise<WatchlistItem> {

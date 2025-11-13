@@ -15,7 +15,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useAuth } from "@/hooks/useAuth";
-import type { Event, Company, AiAnalysis, Scenario } from "@shared/schema";
+import type { Event, Company, AiAnalysis, Scenario, WatchlistItem } from "@shared/schema";
 
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>();
@@ -27,7 +27,7 @@ export default function EventDetail() {
   });
 
   const { data: company } = useQuery<Company>({
-    queryKey: ["/api/companies", event?.companyId],
+    queryKey: ["/api/companies", event?.companyId || "none"],
     enabled: !!event?.companyId,
   });
 
@@ -35,6 +35,14 @@ export default function EventDetail() {
     queryKey: ["/api/ai-analysis", id],
     enabled: !!id,
   });
+
+  const { data: watchlistData } = useQuery<WatchlistItem[]>({
+    queryKey: ["/api/watchlist"],
+    enabled: isAuthenticated,
+  });
+
+  const watchlistItems = watchlistData || [];
+  const isWatched = watchlistItems.some(item => item.eventId === id);
 
   const generateAnalysisMutation = useMutation({
     mutationFn: async () => {
@@ -49,19 +57,36 @@ export default function EventDetail() {
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
+        window.location.href = "/api/login";
         return;
       }
       toast({
         title: "Error",
         description: "Failed to generate analysis. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const addToWatchlistMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/watchlist", { eventId: id });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/watchlist"] });
+      toast({
+        title: "Added to Watchlist",
+        description: "Event added to your watchlist successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        window.location.href = "/api/login";
+        return;
+      }
+      toast({
+        title: "Error",
+        description: "Failed to add event to watchlist.",
         variant: "destructive",
       });
     },
@@ -146,9 +171,15 @@ export default function EventDetail() {
             )}
           </div>
 
-          <Button size="lg" data-testid="button-watchlist">
-            <Star className="w-4 h-4 mr-2" />
-            Add to Watchlist
+          <Button 
+            size="lg" 
+            data-testid="button-watchlist"
+            variant={isWatched ? "default" : "outline"}
+            onClick={() => addToWatchlistMutation.mutate()}
+            disabled={isWatched || addToWatchlistMutation.isPending}
+          >
+            <Star className={`w-4 h-4 mr-2 ${isWatched ? "fill-current" : ""}`} />
+            {isWatched ? "Watching" : "Add to Watchlist"}
           </Button>
         </div>
 

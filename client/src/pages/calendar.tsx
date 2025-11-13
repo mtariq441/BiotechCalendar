@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -8,9 +8,15 @@ import { EventCard } from "@/components/event-card";
 import { FilterSidebar } from "@/components/filter-sidebar";
 import { Search, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { Event, Company } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { isUnauthorizedError } from "@/lib/authUtils";
+import { useAuth } from "@/hooks/useAuth";
+import type { Event, Company, WatchlistItem } from "@shared/schema";
 
 export default function Calendar() {
+  const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState<"month" | "list">("month");
   const [searchQuery, setSearchQuery] = useState("");
@@ -31,8 +37,18 @@ export default function Calendar() {
     queryKey: ["/api/companies"],
   });
 
+  // Fetch watchlist items
+  const { data: watchlistData } = useQuery<WatchlistItem[]>({
+    queryKey: ["/api/watchlist"],
+    enabled: isAuthenticated,
+  });
+
   const events = eventsData || [];
   const companies = companiesData || [];
+  const watchlistItems = watchlistData || [];
+
+  // Create set of watched event IDs
+  const watchedEventIds = new Set(watchlistItems.map(item => item.eventId).filter(Boolean));
 
   // Create company lookup map
   const companyMap = new Map(companies.map(c => [c.id, c]));
@@ -75,6 +91,30 @@ export default function Calendar() {
     });
     setSearchQuery("");
   };
+
+  const addToWatchlistMutation = useMutation({
+    mutationFn: async (eventId: string) => {
+      return await apiRequest("POST", "/api/watchlist", { eventId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/watchlist"] });
+      toast({
+        title: "Added to Watchlist",
+        description: "Event added to your watchlist successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        window.location.href = "/api/login";
+        return;
+      }
+      toast({
+        title: "Error",
+        description: "Failed to add event to watchlist.",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <div className="flex gap-6">
@@ -176,6 +216,8 @@ export default function Calendar() {
                       key={event.id}
                       event={event}
                       company={event.companyId ? companyMap.get(event.companyId) : undefined}
+                      onAddToWatchlist={(id) => addToWatchlistMutation.mutate(id)}
+                      isWatched={watchedEventIds.has(event.id)}
                     />
                   ))
                 )}

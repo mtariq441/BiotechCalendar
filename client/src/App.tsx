@@ -33,21 +33,27 @@ function Router() {
   );
 }
 
-function App() {
+function AppContent() {
   const { isAuthenticated } = useAuth();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        {isAuthenticated ? (
-          <Layout>
-            <Router />
-          </Layout>
-        ) : (
+    <TooltipProvider>
+      <Toaster />
+      {isAuthenticated ? (
+        <Layout>
           <Router />
-        )}
-      </TooltipProvider>
+        </Layout>
+      ) : (
+        <Router />
+      )}
+    </TooltipProvider>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
     </QueryClientProvider>
   );
 }

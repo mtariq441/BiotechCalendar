@@ -153,6 +153,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid request data", errors: validation.error.errors });
       }
       
+      // Check if already in watchlist to prevent duplicates
+      if (validation.data.eventId) {
+        const existing = await storage.getWatchlistItem(userId, validation.data.eventId);
+        if (existing) {
+          return res.status(200).json(existing); // Return existing item, not an error
+        }
+      }
+      
       const item = await storage.createWatchlistItem(validation.data);
       res.json(item);
     } catch (error) {
