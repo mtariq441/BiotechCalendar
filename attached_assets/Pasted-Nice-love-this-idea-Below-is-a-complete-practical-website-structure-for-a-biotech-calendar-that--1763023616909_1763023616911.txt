@@ -1,0 +1,362 @@
+Nice — love this idea. Below is a complete, practical website structure for a biotech calendar that tracks FDA trials & data readouts, shows AI explanations, and provides scenario-based stock forecasting. I cover pages, UI components, data model, APIs, AI integration, realtime updates, tech stack suggestions, security, and a few ready-to-use JSON examples and prompt templates you can drop into your backend.
+
+1 — Product summary (one-liner)
+
+A realtime, interactive biotech calendar that aggregates FDA/clinical-trial events and, on click, displays AI-generated explanations, likely scenarios and scenario-based stock-price forecasts — with alerts, watchlists, and fast, clean UI.
+
+2 — High-level sitemap
+
+Home / Landing
+
+Calendar (main interactive view)
+
+Event / Readout Detail (AI Analysis + Scenarios)
+
+Company / Trial Page
+
+Watchlist & Alerts
+
+Search & Filters
+
+Dashboard (logged-in user)
+
+Admin / Data Management (ingestion, mappings)
+
+Account & Settings (subscriptions, API keys)
+
+Docs / About / Privacy & Terms
+
+3 — Key user stories / flows
+
+Visitor -> open Calendar -> see upcoming FDA events (date tiles) -> click event -> view AI explanation + scenario forecasts + linked companies -> add to watchlist or set alert.
+
+Logged-in user -> create custom filters (phase, sponsor, date range, drug type) -> subscribe to email/push alerts.
+
+Power user/API consumer -> query events, fetch AI report via API, export CSV.
+
+Admin -> configure data sources, correct scraped metadata, retrain/refresh forecasting models.
+
+4 — Pages & UI components (detailed)
+Home / Landing
+
+Hero: value proposition + CTA (View Calendar / Demo)
+
+Top movers / upcoming major FDA decisions
+
+Quick search bar (company | drug | NCT id)
+
+How it works (3 steps: ingest → AI analysis → actionable scenarios)
+
+Pricing / subscription CTA
+
+Calendar (core)
+
+Full-month / week / day toggle
+
+Event cards (date, title, type: PDUFA, Advisory Committee, Readout, NDA/BLA, Phase)
+
+Filter pane (phase, sponsor, therapeutic area, market cap, country)
+
+View toggles: list / compact / timeline
+
+Realtime indicator (last updated timestamp; streaming updates icon)
+
+Quick-add alert/watchlist button on event card
+
+Event / Readout Detail
+
+Header: Title, Date/time, Trial ID (NCT), Sponsor, Linked tickers
+
+Event summary (data from source)
+
+AI Analysis panel:
+
+Short explanation (2–3 sentences)
+
+What to watch (key endpoints, statistical thresholds)
+
+Likely scenarios (Bull / Base / Bear) with probabilities
+
+Scenario-based stock forecasts (price path graphs + assumptions)
+
+Confidence score + model provenance (which dataset/model used)
+
+Timeline / historical context (prior readouts, prior price moves)
+
+Related docs (FDA briefing package, press release, ClinicalTrials.gov link)
+
+CTA: Add to watchlist / Set alert / Export PDF of analysis
+
+Company / Trial Page
+
+Company snapshot: market cap, sector, tickers
+
+Upcoming events list for that company
+
+Trial details: design, endpoints, enrollment, sites
+
+Historical events and outcomes with link to AI analyses
+
+Watchlist & Alerts
+
+List of followed events/companies
+
+Notification preferences: email, SMS, push, webhook
+
+Alert rules: percent move, date-to-event, probability threshold
+
+Admin / Data Manager
+
+Data source connectors (FDA calendar, ClinicalTrials.gov, press feeds)
+
+Event mapping UI + manual override
+
+Data freshness logs
+
+Model retrain triggers and logs
+
+5 — Data model (DB tables / objects) — core entities
+Event
+{
+  "id": "evt_12345",
+  "title": "FDA Advisory Committee: Drug X NDA review",
+  "type": "advisory_committee",
+  "date_utc": "2026-02-20T15:00:00Z",
+  "source_links": ["https://..."],
+  "nct_id": "NCT01234567",
+  "sponsor_id": "sponsor_55",
+  "related_tickers": ["ABCD", "EFGH"],
+  "status": "upcoming",  // upcoming | live | completed | cancelled
+  "last_updated": "2026-01-20T09:12:00Z"
+}
+
+Sponsor / Company
+
+Fields: id, name, tickers[], market_cap, sector, website, last_earnings_date, logo_url
+
+Trial
+
+Fields: id, nct_id, title, phase, design, endpoints[], enrollment, locations[], sponsor_id
+
+AIAnalysis
+{
+  "event_id": "evt_12345",
+  "generated_at": "2026-01-20T10:00:00Z",
+  "summary": "Short explanation...",
+  "scenarios": [
+    {"name":"Bull","prob":0.25,"narrative":"...","price_path":[{"date":"2026-02-21","price":120}, ...]},
+    {"name":"Base","prob":0.55,"narrative":"...","price_path":[...]},
+    {"name":"Bear","prob":0.20,"narrative":"...","price_path":[...]}
+  ],
+  "confidence": 0.78,
+  "model_version": "analysis-v1.3",
+  "sources_used": ["clinicaltrials.gov","fda.gov","historical_price_data"]
+}
+
+6 — API endpoints (examples)
+
+Public:
+
+GET /api/v1/events?from=2026-01-01&to=2026-02-01&filters=phase:3 — list events
+
+GET /api/v1/events/{id} — event detail (includes ai_analysis_id if available)
+
+GET /api/v1/companies/{ticker} — company page
+
+POST /api/v1/users/{id}/watchlist — add watch
+
+Internal:
+
+POST /internal/ingest/fda-event — ingest webhook or scraped event
+
+POST /internal/ai/analyze — trigger AI analysis for event (payload: event_id)
+
+GET /internal/ai/status/{event_id} — status of analysis
+
+Webhook:
+
+POST /webhooks/alerts — user-specified webhook delivery for alerts
+
+7 — Real-time & updates architecture
+
+Ingest: scheduled scrapers + official FDA feeds + ClinicalTrials.gov + RSS + presswire
+
+Normalization pipeline: ETL service that maps raw feeds -> canonical Event object
+
+Streaming updates to clients:
+
+Use WebSockets / Server-Sent Events (SSE) for live calendar updates
+
+Redis pub/sub or Kafka for backend event distribution
+
+Cache: Redis for hot event data & user watchlists
+
+Background workers: Celery / RQ / Bull (node) for heavy tasks (AI generation, price simulations)
+
+8 — AI analysis & forecasting design
+Inputs to AI
+
+Event metadata: type, endpoints, trial design, NCT summary
+
+Historical outcomes for similar events (phase, indication)
+
+Sponsor financials & recent news
+
+Real-time market data for related tickers
+
+Volatility surface / options data (if available) to infer market-implied probabilities
+
+Outputs
+
+Short human summary (2–3 lines)
+
+Key factors & thresholds to watch
+
+3–5 scenarios (name, probability)
+
+For each scenario: narrative, price path (point estimates + bands), recommended actions (optional)
+
+Confidence score & explanation of model limitations
+
+Models & approach
+
+Retrieval + LLM pipeline:
+
+Retriever gathers structured data + docs
+
+LLM (e.g., fine-tuned / instruction-tuned model) composes narrative & scenarios
+
+Quantitative simulator generates price paths:
+
+Monte Carlo on historical vol + event-specific shock
+
+Option-implied distribution when options data present
+
+Post-process: calibrate scenario probabilities using historical similarity model (e.g., nearest neighbors on trial feature space)
+
+Prompt template (example)
+System: You are an expert biotech analyst. Use the provided event data and historical outcomes to produce:
+1) A 2-3 sentence plain-English summary
+2) Three scenarios: Bull, Base, Bear — each with a probability that sums to 1 and a 3-sentence rationale
+3) For each scenario, produce a 30-day price path as a list of daily prices (date, price) relative to the current close
+Data: {event_meta}, {trial_details}, {historical_examples}, {current_price}, {vol_surface}
+Constraints: do not provide legal/medical advice. Mark model confidence between 0-1.
+
+9 — Stock forecasting technical approach (practical)
+
+If options available: derive implied vol and risk-neutral distribution → scenario shocks based on tail probabilities.
+
+If no options: use historical volatility for ticker + apply event-specific shock ranges derived from historical readouts for similar indications.
+
+Monte Carlo simulations with scenario-specific mean drift adjustments.
+
+Provide median & 10/90 percentile bands for each scenario. Show chart in UI.
+
+10 — Tech stack (recommended)
+
+Frontend: React + Next.js (SSR for SEO) + Tailwind CSS (clean UI) + Recharts / Chart.js for graphs
+
+Backend: FastAPI (Python) or Node (Express/NestJS) — API layer
+
+Worker & AI orchestration: Python (Celery + Redis) or Node + Bull
+
+Database: PostgreSQL (event relationships) + Elasticsearch for search
+
+Cache: Redis
+
+Message queue: Kafka or Redis Streams
+
+AI models: OpenAI/GPT-like API or a hosted LLM; use vector DB (Pinecone/Weaviate) for retrieval
+
+Market data: IEX / Polygon / Alpha Vantage / Yahoo Finance (depending on license)
+
+Hosting: Vercel for frontend, AWS/GCP for backend + managed Postgres (RDS, Cloud SQL), Redis (Elasticache)
+
+CI/CD: GitHub Actions
+
+Monitoring: Sentry, Prometheus + Grafana, Datadog
+
+11 — Security & compliance
+
+Rate-limited APIs with API keys
+
+Protect user PII and payment data (PCI compliant if payments)
+
+Audit logs for admin actions
+
+Data provenance: store source URLs and ingestion timestamps for each event
+
+Disclaimers: forecasts are probabilistic & not financial advice
+
+12 — Performance & UX optimizations
+
+Lazy-load calendar tiles and AI analysis (generate on demand)
+
+Cache AI outputs and mark stale vs fresh
+
+Use paginated API and cursor-based lists
+
+Minimize bundle size, use CDN for static assets
+
+Mobile-first responsive design; keyboard-accessible calendar navigation
+
+Accessibility: semantic HTML, ARIA on calendar components
+
+13 — Analytics & metrics to track
+
+DAU/MAU, events clicked per session, watchlist adds, alert conversion rate
+
+Model usage: analysis per day, average latency, user feedback on analysis accuracy
+
+Uptime & data freshness SLA (e.g., <5 minutes for high-priority events)
+
+14 — Admin & ML ops
+
+Versioned AI models and UI toggle to choose model
+
+Feedback loop: allow users to rate AI analyses → feed back to training set
+
+Retraining schedule and data curation tools
+
+15 — Example wireframe notes (quick)
+
+Left: Filter / Search column (collapsible)
+
+Center: Calendar grid (month view). Each day shows stacked color-coded event chips.
+
+Right or modal: Event detail with tabs (Summary | Analysis | Docs | Price Chart)
+
+Floating FAB: Add alert / Quick watch
+
+16 — Minimal MVP scope (to build fast)
+
+Event ingestion from ClinicalTrials.gov + FDA calendar
+
+Basic interactive calendar (month + list)
+
+Single-event AI analysis (on-demand generation)
+
+Watchlist + simple email alerts
+
+Basic price simulation using historical vol (no options data)
+Aim for this MVP to validate demand before adding heavy realtime streaming or complex option-implied modeling.
+
+17 — Sample event JSON (ready to use)
+{
+  "id": "evt_fda_20260220_abcd",
+  "title": "FDA Advisory Committee Meeting: Drug ABCD for Acute Myeloma",
+  "date_utc": "2026-02-20T15:00:00Z",
+  "type": "advisory_committee",
+  "nct_id": "NCT00000001",
+  "sponsor": {"id":"sp_45","name":"BioNova Inc","tickers":["BNOV"]},
+  "endpoints":["Overall Survival (OS)","Progression-Free Survival (PFS)"],
+  "links":["https://clinicaltrials.gov/...","https://fda.gov/..."],
+  "status":"upcoming",
+  "ingested_at":"2026-01-20T09:00:00Z"
+}
+
+18 — Next practical steps (if you want me to continue)
+
+I can generate: detailed DB schema SQL, API OpenAPI spec, React component skeletons for the calendar and event modal, or a product requirements doc (PRD) with acceptance criteria.
+
+Tell me which of the above you want next and I’ll produce it right away.
