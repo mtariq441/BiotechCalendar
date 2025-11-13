@@ -1,11 +1,5 @@
-// Referenced from javascript_log_in_with_replit and javascript_database blueprints
+// Supabase storage implementation
 import {
-  users,
-  companies,
-  trials,
-  events,
-  aiAnalyses,
-  watchlistItems,
   type User,
   type UpsertUser,
   type Company,
@@ -19,8 +13,7 @@ import {
   type WatchlistItem,
   type InsertWatchlistItem,
 } from "@shared/schema";
-import { db } from "./db";
-import { eq, and, gte, lte, inArray, desc } from "drizzle-orm";
+import { supabase } from "./supabase";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -54,138 +47,283 @@ export interface IStorage {
   deleteWatchlistItem(id: string): Promise<void>;
 }
 
-export class DatabaseStorage implements IStorage {
+// Helper function to convert snake_case to camelCase
+function toCamelCase(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(toCamelCase);
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj).reduce((acc, key) => {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      acc[camelKey] = toCamelCase(obj[key]);
+      return acc;
+    }, {} as any);
+  }
+  return obj;
+}
+
+// Helper function to convert camelCase to snake_case
+function toSnakeCase(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(toSnakeCase);
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj).reduce((acc, key) => {
+      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+      acc[snakeKey] = toSnakeCase(obj[key]);
+      return acc;
+    }, {} as any);
+  }
+  return obj;
+}
+
+export class SupabaseStorage implements IStorage {
   // User operations
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') return undefined; // Not found
+      throw error;
+    }
+    return toCamelCase(data) as User;
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
+    const snakeData = toSnakeCase(userData);
+    const { data, error } = await supabase
+      .from('users')
+      .upsert({
+        ...snakeData,
+        updated_at: new Date().toISOString(),
       })
-      .returning();
-    return user;
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return toCamelCase(data) as User;
   }
 
   // Company operations
   async getCompanies(): Promise<Company[]> {
-    return await db.select().from(companies);
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .order('name');
+    
+    if (error) throw error;
+    return toCamelCase(data) as Company[];
   }
 
   async getCompany(id: string): Promise<Company | undefined> {
-    const [company] = await db.select().from(companies).where(eq(companies.id, id));
-    return company || undefined;
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw error;
+    }
+    return toCamelCase(data) as Company;
   }
 
   async createCompany(companyData: InsertCompany): Promise<Company> {
-    const [company] = await db.insert(companies).values(companyData).returning();
-    return company;
+    const snakeData = toSnakeCase(companyData);
+    const { data, error } = await supabase
+      .from('companies')
+      .insert(snakeData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return toCamelCase(data) as Company;
   }
 
   // Trial operations
   async getTrials(): Promise<Trial[]> {
-    return await db.select().from(trials);
+    const { data, error } = await supabase
+      .from('trials')
+      .select('*');
+    
+    if (error) throw error;
+    return toCamelCase(data) as Trial[];
   }
 
   async getTrial(id: string): Promise<Trial | undefined> {
-    const [trial] = await db.select().from(trials).where(eq(trials.id, id));
-    return trial || undefined;
+    const { data, error } = await supabase
+      .from('trials')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw error;
+    }
+    return toCamelCase(data) as Trial;
   }
 
   async getTrialByNctId(nctId: string): Promise<Trial | undefined> {
-    const [trial] = await db.select().from(trials).where(eq(trials.nctId, nctId));
-    return trial || undefined;
+    const { data, error } = await supabase
+      .from('trials')
+      .select('*')
+      .eq('nct_id', nctId)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw error;
+    }
+    return toCamelCase(data) as Trial;
   }
 
   async createTrial(trialData: InsertTrial): Promise<Trial> {
-    const [trial] = await db.insert(trials).values(trialData).returning();
-    return trial;
+    const snakeData = toSnakeCase(trialData);
+    const { data, error } = await supabase
+      .from('trials')
+      .insert(snakeData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return toCamelCase(data) as Trial;
   }
 
   // Event operations
   async getEvents(filters?: { companyId?: string; status?: string[]; types?: string[]; dateFrom?: string; dateTo?: string }): Promise<Event[]> {
-    let query = db.select().from(events);
-    
-    const conditions = [];
+    let query = supabase.from('events').select('*');
     
     if (filters?.companyId) {
-      conditions.push(eq(events.companyId, filters.companyId));
+      query = query.eq('company_id', filters.companyId);
     }
     
     if (filters?.status && filters.status.length > 0) {
-      conditions.push(inArray(events.status, filters.status));
+      query = query.in('status', filters.status);
     }
     
     if (filters?.types && filters.types.length > 0) {
-      conditions.push(inArray(events.type, filters.types));
+      query = query.in('type', filters.types);
     }
     
     if (filters?.dateFrom) {
-      conditions.push(gte(events.dateUtc, new Date(filters.dateFrom)));
+      query = query.gte('date_utc', filters.dateFrom);
     }
     
     if (filters?.dateTo) {
-      conditions.push(lte(events.dateUtc, new Date(filters.dateTo)));
+      query = query.lte('date_utc', filters.dateTo);
     }
     
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions)) as any;
-    }
+    query = query.order('date_utc');
     
-    return await query.orderBy(events.dateUtc);
+    const { data, error } = await query;
+    if (error) throw error;
+    return toCamelCase(data) as Event[];
   }
 
   async getEvent(id: string): Promise<Event | undefined> {
-    const [event] = await db.select().from(events).where(eq(events.id, id));
-    return event || undefined;
+    const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw error;
+    }
+    return toCamelCase(data) as Event;
   }
 
   async createEvent(eventData: InsertEvent): Promise<Event> {
-    const [event] = await db.insert(events).values(eventData).returning();
-    return event;
+    const snakeData = toSnakeCase(eventData);
+    const { data, error } = await supabase
+      .from('events')
+      .insert(snakeData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return toCamelCase(data) as Event;
   }
 
   // AI Analysis operations
   async getAiAnalysis(eventId: string): Promise<AiAnalysis | undefined> {
-    const [analysis] = await db.select().from(aiAnalyses).where(eq(aiAnalyses.eventId, eventId));
-    return analysis || undefined;
+    const { data, error } = await supabase
+      .from('ai_analyses')
+      .select('*')
+      .eq('event_id', eventId)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw error;
+    }
+    return toCamelCase(data) as AiAnalysis;
   }
 
   async createAiAnalysis(analysisData: InsertAiAnalysis): Promise<AiAnalysis> {
-    const [analysis] = await db.insert(aiAnalyses).values(analysisData).returning();
-    return analysis;
+    const snakeData = toSnakeCase(analysisData);
+    const { data, error } = await supabase
+      .from('ai_analyses')
+      .insert(snakeData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return toCamelCase(data) as AiAnalysis;
   }
 
   // Watchlist operations
   async getWatchlistItems(userId: string): Promise<WatchlistItem[]> {
-    return await db.select().from(watchlistItems).where(eq(watchlistItems.userId, userId)).orderBy(desc(watchlistItems.createdAt));
+    const { data, error } = await supabase
+      .from('watchlist_items')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return toCamelCase(data) as WatchlistItem[];
   }
 
   async getWatchlistItem(userId: string, eventId: string): Promise<WatchlistItem | undefined> {
-    const [item] = await db
-      .select()
-      .from(watchlistItems)
-      .where(and(eq(watchlistItems.userId, userId), eq(watchlistItems.eventId, eventId)));
-    return item || undefined;
+    const { data, error } = await supabase
+      .from('watchlist_items')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('event_id', eventId)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') return undefined;
+      throw error;
+    }
+    return toCamelCase(data) as WatchlistItem;
   }
 
   async createWatchlistItem(itemData: InsertWatchlistItem): Promise<WatchlistItem> {
-    const [item] = await db.insert(watchlistItems).values(itemData).returning();
-    return item;
+    const snakeData = toSnakeCase(itemData);
+    const { data, error } = await supabase
+      .from('watchlist_items')
+      .insert(snakeData)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return toCamelCase(data) as WatchlistItem;
   }
 
   async deleteWatchlistItem(id: string): Promise<void> {
-    await db.delete(watchlistItems).where(eq(watchlistItems.id, id));
+    const { error } = await supabase
+      .from('watchlist_items')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
   }
 }
 
-export const storage = new DatabaseStorage();
+export const storage = new SupabaseStorage();
