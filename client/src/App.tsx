@@ -17,17 +17,11 @@ function Router() {
 
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
-        <Route path="/" component={Landing} />
-      ) : (
-        <>
-          <Route path="/" component={Calendar} />
-          <Route path="/calendar" component={Calendar} />
-          <Route path="/event/:id" component={EventDetail} />
-          <Route path="/company/:id" component={CompanyDetail} />
-          <Route path="/watchlist" component={Watchlist} />
-        </>
-      )}
+      <Route path="/" component={isAuthenticated ? Calendar : Landing} />
+      <Route path="/calendar" component={Calendar} />
+      <Route path="/event/:id" component={EventDetail} />
+      <Route path="/company/:id" component={CompanyDetail} />
+      <Route path="/watchlist" component={Watchlist} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -44,7 +38,9 @@ function AppContent() {
           <Router />
         </Layout>
       ) : (
-        <Router />
+        <div className="min-h-screen">
+          <Router />
+        </div>
       )}
     </TooltipProvider>
   );
