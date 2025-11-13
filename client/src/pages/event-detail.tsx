@@ -13,14 +13,11 @@ import { PricePathChart } from "@/components/price-path-chart";
 import { ArrowLeft, Star, ExternalLink, Calendar, Building2, FileText, Brain, Sparkles } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { isUnauthorizedError } from "@/lib/authUtils";
-import { useAuth } from "@/hooks/useAuth";
 import type { Event, Company, AiAnalysis, Scenario, WatchlistItem } from "@shared/schema";
 
 export default function EventDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
 
   const { data: event, isLoading: eventLoading } = useQuery<Event>({
     queryKey: ["/api/events", id],
@@ -38,15 +35,15 @@ export default function EventDetail() {
 
   const { data: watchlistData } = useQuery<WatchlistItem[]>({
     queryKey: ["/api/watchlist"],
-    enabled: isAuthenticated,
   });
 
   const watchlistItems = watchlistData || [];
-  const isWatched = watchlistItems.some(item => item.eventId === id);
+  const isWatched = watchlistItems.some(item => item.eventId?.toString() === id);
 
   const generateAnalysisMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", `/api/ai-analysis/${id}`, {});
+      const eventData = { ...event, company };
+      return await apiRequest("POST", `/api/ai-analysis/${id}`, { eventData });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/ai-analysis", id] });
@@ -56,13 +53,9 @@ export default function EventDetail() {
       });
     },
     onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        window.location.href = "/api/login";
-        return;
-      }
       toast({
         title: "Error",
-        description: "Failed to generate analysis. Please try again.",
+        description: error.message || "Failed to generate analysis. Please try again.",
         variant: "destructive",
       });
     },
@@ -70,25 +63,11 @@ export default function EventDetail() {
 
   const addToWatchlistMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest("POST", "/api/watchlist", { eventId: id });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/watchlist"] });
       toast({
-        title: "Added to Watchlist",
-        description: "Event added to your watchlist successfully.",
+        title: "Watchlist Disabled",
+        description: "Watchlist features require authentication (coming soon!).",
       });
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        window.location.href = "/api/login";
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Failed to add event to watchlist.",
-        variant: "destructive",
-      });
+      return Promise.resolve();
     },
   });
 
@@ -263,7 +242,7 @@ export default function EventDetail() {
                   <div>
                     <span className="font-medium">Generated: </span>
                     <span className="font-mono">
-                      {new Date(aiAnalysis.generatedAt).toLocaleDateString()}
+                      {aiAnalysis.generatedAt ? new Date(aiAnalysis.generatedAt).toLocaleDateString() : 'N/A'}
                     </span>
                   </div>
                 </div>

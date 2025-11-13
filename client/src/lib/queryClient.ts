@@ -38,42 +38,36 @@ export const getQueryFn = <T>(options: {
 }): QueryFunction<T> =>
   async ({ queryKey }): Promise<T> => {
     const { on401: unauthorizedBehavior } = options;
-    const url = queryKey.join("/") as string;
+    const baseUrl = queryKey[0] as string;
     
-    if (url === "/api/events") {
+    if (baseUrl === "/api/events") {
       await new Promise(resolve => setTimeout(resolve, 300));
       return getEventsWithDetails() as T;
     }
     
-    if (url === "/api/companies") {
+    if (baseUrl === "/api/companies") {
       await new Promise(resolve => setTimeout(resolve, 200));
-      return mockCompanies as T;
-    }
-    
-    if (url === "/api/watchlist") {
-      await new Promise(resolve => setTimeout(resolve, 200));
-      return mockWatchlist as T;
-    }
-    
-    if (url.startsWith("/api/events/")) {
-      const eventId = parseInt(url.split("/").pop() || "0");
-      await new Promise(resolve => setTimeout(resolve, 300));
-      return getEventWithFullDetails(eventId) as T;
-    }
-    
-    if (url.startsWith("/api/companies/")) {
-      const companyId = parseInt(url.split("/").pop() || "0");
-      await new Promise(resolve => setTimeout(resolve, 300));
+      if (queryKey.length === 1) {
+        return mockCompanies as T;
+      }
+      const companyId = parseInt(queryKey[1] as string || "0");
       const company = mockCompanies.find(c => c.id === companyId);
       if (!company) throw new Error("Company not found");
       return company as T;
     }
     
-    if (url === "/api/auth/user") {
+    if (baseUrl === "/api/watchlist") {
+      await new Promise(resolve => setTimeout(resolve, 200));
+      return mockWatchlist as T;
+    }
+    
+    if (baseUrl === "/api/auth/user") {
       return null as T;
     }
     
-    if (url.startsWith("/api/ai-analysis/")) {
+    if (baseUrl === "/api/ai-analysis") {
+      const eventId = queryKey[1] as string;
+      const url = `/api/ai-analysis/${eventId}`;
       const res = await fetch(url);
       if (unauthorizedBehavior === "returnNull" && res.status === 401) {
         return null as T;
@@ -82,7 +76,7 @@ export const getQueryFn = <T>(options: {
       return await res.json();
     }
     
-    throw new Error(`Unknown API endpoint: ${url}`);
+    throw new Error(`Unknown API endpoint: ${baseUrl}`);
   };
 
 export const queryClient = new QueryClient({

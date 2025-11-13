@@ -10,13 +10,10 @@ import { Search, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "luc
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { isUnauthorizedError } from "@/lib/authUtils";
-import { useAuth } from "@/hooks/useAuth";
 import type { Event, Company, WatchlistItem } from "@shared/schema";
 
 export default function Calendar() {
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [view, setView] = useState<"month" | "list">("month");
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,7 +37,6 @@ export default function Calendar() {
   // Fetch watchlist items
   const { data: watchlistData } = useQuery<WatchlistItem[]>({
     queryKey: ["/api/watchlist"],
-    enabled: isAuthenticated,
   });
 
   const events = eventsData || [];
@@ -94,25 +90,11 @@ export default function Calendar() {
 
   const addToWatchlistMutation = useMutation({
     mutationFn: async (eventId: string) => {
-      return await apiRequest("POST", "/api/watchlist", { eventId });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/watchlist"] });
       toast({
-        title: "Added to Watchlist",
-        description: "Event added to your watchlist successfully.",
+        title: "Watchlist Disabled",
+        description: "Watchlist features require authentication (coming soon!).",
       });
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        window.location.href = "/api/login";
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Failed to add event to watchlist.",
-        variant: "destructive",
-      });
+      return Promise.resolve();
     },
   });
 

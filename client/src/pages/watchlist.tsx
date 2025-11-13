@@ -1,67 +1,39 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EventCard } from "@/components/event-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star, Trash2 } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { isUnauthorizedError } from "@/lib/authUtils";
-import { useAuth } from "@/hooks/useAuth";
 import type { WatchlistItem, Event, Company } from "@shared/schema";
 
 export default function Watchlist() {
   const { toast } = useToast();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
-
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      window.location.href = "/api/login";
-    }
-  }, [isAuthenticated, authLoading]);
 
   const { data: watchlistItems, isLoading: watchlistLoading } = useQuery<WatchlistItem[]>({
     queryKey: ["/api/watchlist"],
-    enabled: isAuthenticated,
   });
 
   const { data: events } = useQuery<Event[]>({
     queryKey: ["/api/events"],
-    enabled: isAuthenticated,
   });
 
   const { data: companies } = useQuery<Company[]>({
     queryKey: ["/api/companies"],
-    enabled: isAuthenticated,
   });
 
   const removeFromWatchlistMutation = useMutation({
     mutationFn: async (itemId: string) => {
-      await apiRequest("DELETE", `/api/watchlist/${itemId}`, {});
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/watchlist"] });
       toast({
-        title: "Removed",
-        description: "Item removed from watchlist.",
+        title: "Watchlist Disabled",
+        description: "Watchlist features require authentication (coming soon!).",
       });
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        window.location.href = "/api/login";
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Failed to remove item from watchlist.",
-        variant: "destructive",
-      });
+      return Promise.resolve();
     },
   });
 
-  if (authLoading || watchlistLoading) {
+  if (watchlistLoading) {
     return (
       <div className="max-w-7xl mx-auto space-y-4">
         <Skeleton className="h-12 w-64" />

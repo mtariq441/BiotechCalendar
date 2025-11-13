@@ -64,9 +64,9 @@ export default function Landing() {
               BioCalendar
             </span>
           </motion.div>
-          <Button asChild data-testid="button-login" className="group">
-            <a href="/api/login" className="flex items-center gap-2">
-              Sign In
+          <Button asChild data-testid="button-calendar" className="group">
+            <a href="/calendar" className="flex items-center gap-2">
+              View Calendar
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </a>
           </Button>
@@ -131,7 +131,7 @@ export default function Landing() {
 
           <motion.div variants={itemVariants} className="flex gap-4 justify-center flex-wrap">
             <Button size="lg" asChild data-testid="button-view-calendar" className="group shadow-lg hover:shadow-xl transition-shadow">
-              <a href="/api/login" className="flex items-center gap-2">
+              <a href="/calendar" className="flex items-center gap-2">
                 View Calendar
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </a>
@@ -323,7 +323,7 @@ export default function Landing() {
             transition={{ delay: 0.2 }}
           >
             <Button size="lg" variant="secondary" asChild className="group shadow-xl hover:shadow-2xl transition-shadow">
-              <a href="/api/login" className="flex items-center gap-2">
+              <a href="/calendar" className="flex items-center gap-2">
                 Start Tracking Events
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </a>
