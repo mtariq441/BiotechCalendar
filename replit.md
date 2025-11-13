@@ -71,10 +71,12 @@ Preferred communication style: Simple, everyday language.
 ### External Dependencies
 
 **Database:**
-- Supabase as PostgreSQL database provider
-- Direct SQL queries via Supabase client (`@supabase/supabase-js`)
+- Replit PostgreSQL database (development)
+- Direct PostgreSQL connection using `pg` library
+- Support for Supabase as alternative (for Vercel deployment)
 - Schema includes sessions, users, companies, trials, events, ai_analyses, watchlist_items tables
 - Timestamp handling with UTC conversion for consistent date operations
+- Automatic schema initialization on startup
 
 **AI Service:**
 - OpenAI API (GPT-5 model) for generating event analysis
@@ -99,7 +101,29 @@ Preferred communication style: Simple, everyday language.
 - Vite plugins for Replit integration (cartographer, dev banner, error overlay)
 
 **Deployment:**
-- Designed for Render deployment (see RENDER_DEPLOYMENT.md)
-- Environment variables: DATABASE_URL, SUPABASE_URL, SUPABASE_ANON_KEY, OPENAI_API_KEY, SESSION_SECRET
+- Primary: Replit (native deployment with built-in PostgreSQL)
+- Vercel: Supported (see VERCEL_QUICK_START.md and VERCEL_DEPLOYMENT.md)
+- Render: Supported (see RENDER_DEPLOYMENT.md)
+- Environment variables: 
+  - Required: DATABASE_URL (or SUPABASE_URL + SUPABASE_ANON_KEY), SESSION_SECRET
+  - Optional: OPENAI_API_KEY, ISSUER_URL, REPL_ID
 - Build process: `npm run build` creates bundled server and client assets
 - Production start: `npm start` runs compiled server from dist/
+
+## Recent Changes
+
+### 2025-01-13: Vercel Deployment Support & Database Migration
+
+- Migrated from Supabase-only to flexible database setup:
+  - Primary: Direct PostgreSQL connection via `pg` library
+  - Alternative: Supabase (for easy Vercel deployment)
+- Created Vercel deployment configuration:
+  - `vercel.json` - Vercel build and routing configuration
+  - `VERCEL_QUICK_START.md` - Quick deployment guide
+  - `VERCEL_DEPLOYMENT.md` - Comprehensive deployment documentation
+  - `.env.example` - Environment variable template
+- Added PostgreSQL storage layer (`server/pg-storage.ts`)
+- Made OpenAI API key optional (app works without AI features)
+- Made Supabase credentials optional (no longer throws errors if missing)
+- Created database initialization script (`server/db.ts`)
+- Updated authentication to support multiple deployment environments
