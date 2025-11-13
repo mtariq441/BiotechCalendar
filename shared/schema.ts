@@ -1,157 +1,105 @@
-import { sql } from "drizzle-orm";
-import { 
-  pgTable, 
-  text, 
-  varchar, 
-  timestamp, 
-  jsonb,
-  integer,
-  real,
-  index
-} from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { relations } from "drizzle-orm";
 
-// Session storage table (required for Replit Auth)
-export const sessions = pgTable(
-  "sessions",
-  {
-    sid: varchar("sid").primaryKey(),
-    sess: jsonb("sess").notNull(),
-    expire: timestamp("expire").notNull(),
-  },
-  (table) => [index("IDX_session_expire").on(table.expire)],
-);
+// User types
+export interface User {
+  id: string;
+  email?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  profileImageUrl?: string | null;
+  createdAt?: Date | null;
+  updatedAt?: Date | null;
+}
 
-// User storage table (required for Replit Auth)
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  profileImageUrl: varchar("profile_image_url"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
+export interface UpsertUser {
+  id?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  profileImageUrl?: string;
+}
 
-export type UpsertUser = typeof users.$inferInsert;
-export type User = typeof users.$inferSelect;
+// Company types
+export interface Company {
+  id: string;
+  name: string;
+  tickers: string[];
+  marketCap?: string | null;
+  sector?: string | null;
+  website?: string | null;
+  logoUrl?: string | null;
+  createdAt?: Date | null;
+}
 
-// Companies/Sponsors table
-export const companies = pgTable("companies", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  tickers: text("tickers").array().notNull().default(sql`ARRAY[]::text[]`),
-  marketCap: text("market_cap"),
-  sector: text("sector"),
-  website: text("website"),
-  logoUrl: text("logo_url"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const insertCompanySchema = createInsertSchema(companies).omit({
-  id: true,
-  createdAt: true,
+export const insertCompanySchema = z.object({
+  name: z.string(),
+  tickers: z.array(z.string()),
+  marketCap: z.string().optional(),
+  sector: z.string().optional(),
+  website: z.string().optional(),
+  logoUrl: z.string().optional(),
 });
 
 export type InsertCompany = z.infer<typeof insertCompanySchema>;
-export type Company = typeof companies.$inferSelect;
 
-// Trials table
-export const trials = pgTable("trials", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  nctId: text("nct_id").unique(),
-  title: text("title").notNull(),
-  phase: text("phase"),
-  design: text("design"),
-  endpoints: text("endpoints").array().default(sql`ARRAY[]::text[]`),
-  enrollment: integer("enrollment"),
-  locations: text("locations").array().default(sql`ARRAY[]::text[]`),
-  companyId: varchar("company_id").references(() => companies.id),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+// Trial types
+export interface Trial {
+  id: string;
+  nctId?: string | null;
+  title: string;
+  phase?: string | null;
+  design?: string | null;
+  endpoints?: string[] | null;
+  enrollment?: number | null;
+  locations?: string[] | null;
+  companyId?: string | null;
+  createdAt?: Date | null;
+}
 
-export const trialsRelations = relations(trials, ({ one }) => ({
-  company: one(companies, {
-    fields: [trials.companyId],
-    references: [companies.id],
-  }),
-}));
-
-export const insertTrialSchema = createInsertSchema(trials).omit({
-  id: true,
-  createdAt: true,
+export const insertTrialSchema = z.object({
+  nctId: z.string().optional(),
+  title: z.string(),
+  phase: z.string().optional(),
+  design: z.string().optional(),
+  endpoints: z.array(z.string()).optional(),
+  enrollment: z.number().optional(),
+  locations: z.array(z.string()).optional(),
+  companyId: z.string().optional(),
 });
 
 export type InsertTrial = z.infer<typeof insertTrialSchema>;
-export type Trial = typeof trials.$inferSelect;
 
-// Events table
-export const events = pgTable("events", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  title: text("title").notNull(),
-  type: text("type").notNull(), // advisory_committee, pdufa, readout, nda_bla, phase_result
-  dateUtc: timestamp("date_utc").notNull(),
-  sourceLinks: text("source_links").array().default(sql`ARRAY[]::text[]`),
-  nctId: text("nct_id"),
-  companyId: varchar("company_id").references(() => companies.id),
-  relatedTickers: text("related_tickers").array().default(sql`ARRAY[]::text[]`),
-  status: text("status").notNull().default("upcoming"), // upcoming, live, completed, cancelled
-  therapeuticArea: text("therapeutic_area"),
-  description: text("description"),
-  lastUpdated: timestamp("last_updated").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+// Event types
+export interface Event {
+  id: string;
+  title: string;
+  type: string;
+  dateUtc: Date;
+  sourceLinks?: string[] | null;
+  nctId?: string | null;
+  companyId?: string | null;
+  relatedTickers?: string[] | null;
+  status: string;
+  therapeuticArea?: string | null;
+  description?: string | null;
+  lastUpdated?: Date | null;
+  createdAt?: Date | null;
+}
 
-export const eventsRelations = relations(events, ({ one, many }) => ({
-  company: one(companies, {
-    fields: [events.companyId],
-    references: [companies.id],
-  }),
-  aiAnalysis: one(aiAnalyses, {
-    fields: [events.id],
-    references: [aiAnalyses.eventId],
-  }),
-  watchlistItems: many(watchlistItems),
-}));
-
-export const insertEventSchema = createInsertSchema(events).omit({
-  id: true,
-  createdAt: true,
-  lastUpdated: true,
+export const insertEventSchema = z.object({
+  title: z.string(),
+  type: z.string(),
+  dateUtc: z.date(),
+  sourceLinks: z.array(z.string()).optional(),
+  nctId: z.string().optional(),
+  companyId: z.string().optional(),
+  relatedTickers: z.array(z.string()).optional(),
+  status: z.string(),
+  therapeuticArea: z.string().optional(),
+  description: z.string().optional(),
 });
 
 export type InsertEvent = z.infer<typeof insertEventSchema>;
-export type Event = typeof events.$inferSelect;
-
-// AI Analyses table
-export const aiAnalyses = pgTable("ai_analyses", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  eventId: varchar("event_id").notNull().references(() => events.id).unique(),
-  generatedAt: timestamp("generated_at").defaultNow(),
-  summary: text("summary").notNull(),
-  keyFactors: text("key_factors").array().default(sql`ARRAY[]::text[]`),
-  scenarios: jsonb("scenarios").notNull(), // Array of {name, prob, narrative, pricePath: [{date, price}]}
-  confidence: real("confidence").notNull(),
-  modelVersion: text("model_version").notNull(),
-  sourcesUsed: text("sources_used").array().default(sql`ARRAY[]::text[]`),
-});
-
-export const aiAnalysesRelations = relations(aiAnalyses, ({ one }) => ({
-  event: one(events, {
-    fields: [aiAnalyses.eventId],
-    references: [events.id],
-  }),
-}));
-
-export const insertAiAnalysisSchema = createInsertSchema(aiAnalyses).omit({
-  id: true,
-  generatedAt: true,
-});
-
-export type InsertAiAnalysis = z.infer<typeof insertAiAnalysisSchema>;
-export type AiAnalysis = typeof aiAnalyses.$inferSelect;
 
 // Scenario type for AI analysis
 export interface Scenario {
@@ -162,34 +110,44 @@ export interface Scenario {
   priceTarget: number;
 }
 
-// Watchlist items table
-export const watchlistItems = pgTable("watchlist_items", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id),
-  eventId: varchar("event_id").references(() => events.id),
-  companyId: varchar("company_id").references(() => companies.id),
-  createdAt: timestamp("created_at").defaultNow(),
+// AI Analysis types
+export interface AiAnalysis {
+  id: string;
+  eventId: string;
+  generatedAt?: Date | null;
+  summary: string;
+  keyFactors?: string[] | null;
+  scenarios: Scenario[];
+  confidence: number;
+  modelVersion: string;
+  sourcesUsed?: string[] | null;
+}
+
+export const insertAiAnalysisSchema = z.object({
+  eventId: z.string(),
+  summary: z.string(),
+  keyFactors: z.array(z.string()).optional(),
+  scenarios: z.any(), // JSONB
+  confidence: z.number(),
+  modelVersion: z.string(),
+  sourcesUsed: z.array(z.string()).optional(),
 });
 
-export const watchlistItemsRelations = relations(watchlistItems, ({ one }) => ({
-  user: one(users, {
-    fields: [watchlistItems.userId],
-    references: [users.id],
-  }),
-  event: one(events, {
-    fields: [watchlistItems.eventId],
-    references: [events.id],
-  }),
-  company: one(companies, {
-    fields: [watchlistItems.companyId],
-    references: [companies.id],
-  }),
-}));
+export type InsertAiAnalysis = z.infer<typeof insertAiAnalysisSchema>;
 
-export const insertWatchlistItemSchema = createInsertSchema(watchlistItems).omit({
-  id: true,
-  createdAt: true,
+// Watchlist types
+export interface WatchlistItem {
+  id: string;
+  userId: string;
+  eventId?: string | null;
+  companyId?: string | null;
+  createdAt?: Date | null;
+}
+
+export const insertWatchlistItemSchema = z.object({
+  userId: z.string(),
+  eventId: z.string().optional(),
+  companyId: z.string().optional(),
 });
 
 export type InsertWatchlistItem = z.infer<typeof insertWatchlistItemSchema>;
-export type WatchlistItem = typeof watchlistItems.$inferSelect;
