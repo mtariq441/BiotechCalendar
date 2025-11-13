@@ -33,11 +33,11 @@ export async function apiRequest(
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
+export const getQueryFn = <T>(options: {
   on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async <T>({ queryKey }): Promise<T> => {
+}): QueryFunction<T> =>
+  async ({ queryKey }): Promise<T> => {
+    const { on401: unauthorizedBehavior } = options;
     const url = queryKey.join("/") as string;
     
     if (url === "/api/events") {
