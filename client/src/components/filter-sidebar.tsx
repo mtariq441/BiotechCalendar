@@ -4,7 +4,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { X } from "lucide-react";
+import { X, Filter } from "lucide-react";
+import { motion } from "framer-motion";
 
 interface FilterSidebarProps {
   filters: {
@@ -31,6 +32,22 @@ const STATUSES = [
   { value: "completed", label: "Completed" },
 ];
 
+const containerVariants = {
+  hidden: { opacity: 0, x: -20 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: {
+      staggerChildren: 0.05,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0 },
+};
+
 export function FilterSidebar({ filters, onFilterChange, onClear }: FilterSidebarProps) {
   const handleTypeToggle = (type: string) => {
     const newTypes = filters.types.includes(type)
@@ -46,82 +63,128 @@ export function FilterSidebar({ filters, onFilterChange, onClear }: FilterSideba
     onFilterChange({ ...filters, status: newStatus });
   };
 
+  const activeFilterCount = 
+    filters.types.length + 
+    filters.status.filter(s => s !== 'upcoming').length + // Don't count 'upcoming' as it's default
+    (filters.dateFrom ? 1 : 0) + 
+    (filters.dateTo ? 1 : 0);
+
   return (
-    <Card className="p-6 sticky top-6 max-h-[calc(100vh-8rem)] overflow-y-auto" data-testid="filter-sidebar">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-sm font-semibold uppercase tracking-wide">Filters</h3>
-        <Button variant="ghost" size="sm" onClick={onClear} data-testid="button-clear-filters">
-          <X className="w-4 h-4 mr-1" />
-          Clear
-        </Button>
-      </div>
-
-      {/* Event Type Filter */}
-      <div className="space-y-3 mb-6">
-        <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Event Type</h4>
-        {EVENT_TYPES.map((type) => (
-          <div key={type.value} className="flex items-center space-x-2">
-            <Checkbox
-              id={`type-${type.value}`}
-              checked={filters.types.includes(type.value)}
-              onCheckedChange={() => handleTypeToggle(type.value)}
-              data-testid={`filter-type-${type.value}`}
-            />
-            <Label htmlFor={`type-${type.value}`} className="text-sm font-normal cursor-pointer">
-              {type.label}
-            </Label>
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
+      <Card className="p-6 sticky top-6 max-h-[calc(100vh-8rem)] overflow-y-auto backdrop-blur-sm bg-card/95 shadow-lg" data-testid="filter-sidebar">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-primary" />
+            <h3 className="text-sm font-semibold uppercase tracking-wide">Filters</h3>
+            {activeFilterCount > 0 && (
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold"
+              >
+                {activeFilterCount}
+              </motion.span>
+            )}
           </div>
-        ))}
-      </div>
+          <Button variant="ghost" size="sm" onClick={onClear} data-testid="button-clear-filters" className="hover:bg-destructive/10 hover:text-destructive">
+            <X className="w-4 h-4 mr-1" />
+            Clear
+          </Button>
+        </div>
 
-      <Separator className="my-6" />
-
-      {/* Status Filter */}
-      <div className="space-y-3 mb-6">
-        <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Status</h4>
-        {STATUSES.map((status) => (
-          <div key={status.value} className="flex items-center space-x-2">
-            <Checkbox
-              id={`status-${status.value}`}
-              checked={filters.status.includes(status.value)}
-              onCheckedChange={() => handleStatusToggle(status.value)}
-              data-testid={`filter-status-${status.value}`}
-            />
-            <Label htmlFor={`status-${status.value}`} className="text-sm font-normal cursor-pointer">
-              {status.label}
-            </Label>
+        {/* Event Type Filter */}
+        <motion.div className="space-y-3 mb-6" variants={itemVariants}>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+            Event Type
+          </h4>
+          <div className="space-y-2">
+            {EVENT_TYPES.map((type) => (
+              <motion.div
+                key={type.value}
+                className="flex items-center space-x-2 p-2 rounded-lg hover:bg-accent/50 transition-colors"
+                whileHover={{ x: 4 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Checkbox
+                  id={`type-${type.value}`}
+                  checked={filters.types.includes(type.value)}
+                  onCheckedChange={() => handleTypeToggle(type.value)}
+                  data-testid={`filter-type-${type.value}`}
+                />
+                <Label htmlFor={`type-${type.value}`} className="text-sm font-normal cursor-pointer flex-1">
+                  {type.label}
+                </Label>
+              </motion.div>
+            ))}
           </div>
-        ))}
-      </div>
+        </motion.div>
 
-      <Separator className="my-6" />
+        <Separator className="my-6" />
 
-      {/* Date Range Filter */}
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Date Range</h4>
-        <div className="space-y-2">
-          <Label htmlFor="date-from" className="text-sm">From</Label>
-          <Input
-            id="date-from"
-            type="date"
-            value={filters.dateFrom}
-            onChange={(e) => onFilterChange({ ...filters, dateFrom: e.target.value })}
-            className="font-mono"
-            data-testid="input-date-from"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="date-to" className="text-sm">To</Label>
-          <Input
-            id="date-to"
-            type="date"
-            value={filters.dateTo}
-            onChange={(e) => onFilterChange({ ...filters, dateTo: e.target.value })}
-            className="font-mono"
-            data-testid="input-date-to"
-          />
-        </div>
-      </div>
-    </Card>
+        {/* Status Filter */}
+        <motion.div className="space-y-3 mb-6" variants={itemVariants}>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+            Status
+          </h4>
+          <div className="space-y-2">
+            {STATUSES.map((status) => (
+              <motion.div
+                key={status.value}
+                className="flex items-center space-x-2 p-2 rounded-lg hover:bg-accent/50 transition-colors"
+                whileHover={{ x: 4 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Checkbox
+                  id={`status-${status.value}`}
+                  checked={filters.status.includes(status.value)}
+                  onCheckedChange={() => handleStatusToggle(status.value)}
+                  data-testid={`filter-status-${status.value}`}
+                />
+                <Label htmlFor={`status-${status.value}`} className="text-sm font-normal cursor-pointer flex-1">
+                  {status.label}
+                </Label>
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+
+        <Separator className="my-6" />
+
+        {/* Date Range Filter */}
+        <motion.div className="space-y-3" variants={itemVariants}>
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
+            Date Range
+          </h4>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="date-from" className="text-sm font-medium">From</Label>
+              <Input
+                id="date-from"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => onFilterChange({ ...filters, dateFrom: e.target.value })}
+                className="font-mono"
+                data-testid="input-date-from"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="date-to" className="text-sm font-medium">To</Label>
+              <Input
+                id="date-to"
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => onFilterChange({ ...filters, dateTo: e.target.value })}
+                className="font-mono"
+                data-testid="input-date-to"
+              />
+            </div>
+          </div>
+        </motion.div>
+      </Card>
+    </motion.div>
   );
 }

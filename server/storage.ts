@@ -47,14 +47,33 @@ export interface IStorage {
   deleteWatchlistItem(id: string): Promise<void>;
 }
 
-// Helper function to convert snake_case to camelCase
+// Specific Supabase timestamp columns that should be converted to Date objects
+const TIMESTAMP_COLUMNS = new Set([
+  'created_at',
+  'updated_at',
+  'last_updated',
+  'date_utc',
+  'generated_at',
+  'expire'
+]);
+
+// Helper function to convert snake_case to camelCase and handle date strings
 function toCamelCase(obj: any): any {
   if (Array.isArray(obj)) {
     return obj.map(toCamelCase);
   } else if (obj !== null && typeof obj === 'object') {
     return Object.keys(obj).reduce((acc, key) => {
       const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-      acc[camelKey] = toCamelCase(obj[key]);
+      const value = obj[key];
+      
+      // Convert ISO date strings to Date objects ONLY for specific timestamp columns
+      if (typeof value === 'string' && 
+          TIMESTAMP_COLUMNS.has(key) &&
+          /^\d{4}-\d{2}-\d{2}/.test(value)) {
+        acc[camelKey] = new Date(value);
+      } else {
+        acc[camelKey] = toCamelCase(value);
+      }
       return acc;
     }, {} as any);
   }
