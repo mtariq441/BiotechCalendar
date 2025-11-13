@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { seedDatabase } from "./seed";
 
 const app = express();
 
@@ -64,6 +65,15 @@ app.use((req, res, next) => {
     await setupVite(app, server);
   } else {
     serveStatic(app);
+  }
+
+  // Seed database on startup (only in development)
+  if (app.get("env") === "development") {
+    try {
+      await seedDatabase();
+    } catch (error) {
+      log("Warning: Database seeding failed (may already be seeded)");
+    }
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
