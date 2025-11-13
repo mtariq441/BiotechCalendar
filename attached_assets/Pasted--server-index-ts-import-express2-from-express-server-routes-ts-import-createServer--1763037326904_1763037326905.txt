@@ -1,0 +1,965 @@
+// server/index.ts
+import express2 from "express";
+
+// server/routes.ts
+import { createServer } from "http";
+
+// server/supabase.ts
+import { createClient } from "@supabase/supabase-js";
+if (!process.env.SUPABASE_URL) {
+  throw new Error("SUPABASE_URL must be set. Did you forget to add it to secrets?");
+}
+if (!process.env.SUPABASE_ANON_KEY) {
+  throw new Error("SUPABASE_ANON_KEY must be set. Did you forget to add it to secrets?");
+}
+var supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+
+// server/storage.ts
+var TIMESTAMP_COLUMNS = /* @__PURE__ */ new Set([
+  "created_at",
+  "updated_at",
+  "last_updated",
+  "date_utc",
+  "generated_at",
+  "expire"
+]);
+function toCamelCase(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(toCamelCase);
+  } else if (obj !== null && typeof obj === "object") {
+    return Object.keys(obj).reduce((acc, key) => {
+      const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      const value = obj[key];
+      if (typeof value === "string" && TIMESTAMP_COLUMNS.has(key) && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+        acc[camelKey] = new Date(value);
+      } else {
+        acc[camelKey] = toCamelCase(value);
+      }
+      return acc;
+    }, {});
+  }
+  return obj;
+}
+function toSnakeCase(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(toSnakeCase);
+  } else if (obj !== null && typeof obj === "object") {
+    return Object.keys(obj).reduce((acc, key) => {
+      const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+      acc[snakeKey] = toSnakeCase(obj[key]);
+      return acc;
+    }, {});
+  }
+  return obj;
+}
+var SupabaseStorage = class {
+  // User operations
+  async getUser(id) {
+    const { data, error } = await supabase.from("users").select("*").eq("id", id).single();
+    if (error) {
+      if (error.code === "PGRST116") return void 0;
+      throw error;
+    }
+    return toCamelCase(data);
+  }
+  async upsertUser(userData) {
+    const snakeData = toSnakeCase(userData);
+    const { data, error } = await supabase.from("users").upsert({
+      ...snakeData,
+      updated_at: (/* @__PURE__ */ new Date()).toISOString()
+    }).select().single();
+    if (error) throw error;
+    return toCamelCase(data);
+  }
+  // Company operations
+  async getCompanies() {
+    const { data, error } = await supabase.from("companies").select("*").order("name");
+    if (error) throw error;
+    return toCamelCase(data);
+  }
+  async getCompany(id) {
+    const { data, error } = await supabase.from("companies").select("*").eq("id", id).single();
+    if (error) {
+      if (error.code === "PGRST116") return void 0;
+      throw error;
+    }
+    return toCamelCase(data);
+  }
+  async createCompany(companyData) {
+    const snakeData = toSnakeCase(companyData);
+    const { data, error } = await supabase.from("companies").insert(snakeData).select().single();
+    if (error) throw error;
+    return toCamelCase(data);
+  }
+  // Trial operations
+  async getTrials() {
+    const { data, error } = await supabase.from("trials").select("*");
+    if (error) throw error;
+    return toCamelCase(data);
+  }
+  async getTrial(id) {
+    const { data, error } = await supabase.from("trials").select("*").eq("id", id).single();
+    if (error) {
+      if (error.code === "PGRST116") return void 0;
+      throw error;
+    }
+    return toCamelCase(data);
+  }
+  async getTrialByNctId(nctId) {
+    const { data, error } = await supabase.from("trials").select("*").eq("nct_id", nctId).single();
+    if (error) {
+      if (error.code === "PGRST116") return void 0;
+      throw error;
+    }
+    return toCamelCase(data);
+  }
+  async createTrial(trialData) {
+    const snakeData = toSnakeCase(trialData);
+    const { data, error } = await supabase.from("trials").insert(snakeData).select().single();
+    if (error) throw error;
+    return toCamelCase(data);
+  }
+  // Event operations
+  async getEvents(filters) {
+    let query = supabase.from("events").select("*");
+    if (filters?.companyId) {
+      query = query.eq("company_id", filters.companyId);
+    }
+    if (filters?.status && filters.status.length > 0) {
+      query = query.in("status", filters.status);
+    }
+    if (filters?.types && filters.types.length > 0) {
+      query = query.in("type", filters.types);
+    }
+    if (filters?.dateFrom) {
+      query = query.gte("date_utc", filters.dateFrom);
+    }
+    if (filters?.dateTo) {
+      query = query.lte("date_utc", filters.dateTo);
+    }
+    query = query.order("date_utc");
+    const { data, error } = await query;
+    if (error) throw error;
+    return toCamelCase(data);
+  }
+  async getEvent(id) {
+    const { data, error } = await supabase.from("events").select("*").eq("id", id).single();
+    if (error) {
+      if (error.code === "PGRST116") return void 0;
+      throw error;
+    }
+    return toCamelCase(data);
+  }
+  async createEvent(eventData) {
+    const snakeData = toSnakeCase(eventData);
+    const { data, error } = await supabase.from("events").insert(snakeData).select().single();
+    if (error) throw error;
+    return toCamelCase(data);
+  }
+  // AI Analysis operations
+  async getAiAnalysis(eventId) {
+    const { data, error } = await supabase.from("ai_analyses").select("*").eq("event_id", eventId).single();
+    if (error) {
+      if (error.code === "PGRST116") return void 0;
+      throw error;
+    }
+    return toCamelCase(data);
+  }
+  async createAiAnalysis(analysisData) {
+    const snakeData = toSnakeCase(analysisData);
+    const { data, error } = await supabase.from("ai_analyses").insert(snakeData).select().single();
+    if (error) throw error;
+    return toCamelCase(data);
+  }
+  // Watchlist operations
+  async getWatchlistItems(userId) {
+    const { data, error } = await supabase.from("watchlist_items").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+    if (error) throw error;
+    return toCamelCase(data);
+  }
+  async getWatchlistItem(userId, eventId) {
+    const { data, error } = await supabase.from("watchlist_items").select("*").eq("user_id", userId).eq("event_id", eventId).single();
+    if (error) {
+      if (error.code === "PGRST116") return void 0;
+      throw error;
+    }
+    return toCamelCase(data);
+  }
+  async createWatchlistItem(itemData) {
+    const snakeData = toSnakeCase(itemData);
+    const { data, error } = await supabase.from("watchlist_items").insert(snakeData).select().single();
+    if (error) throw error;
+    return toCamelCase(data);
+  }
+  async deleteWatchlistItem(id) {
+    const { error } = await supabase.from("watchlist_items").delete().eq("id", id);
+    if (error) throw error;
+  }
+};
+var storage = new SupabaseStorage();
+
+// server/replitAuth.ts
+import * as client from "openid-client";
+import { Strategy } from "openid-client/passport";
+import passport from "passport";
+import session from "express-session";
+import memoize from "memoizee";
+import connectPg from "connect-pg-simple";
+var getOidcConfig = memoize(
+  async () => {
+    return await client.discovery(
+      new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
+      process.env.REPL_ID
+    );
+  },
+  { maxAge: 3600 * 1e3 }
+);
+function getSession() {
+  const sessionTtl = 7 * 24 * 60 * 60 * 1e3;
+  const pgStore = connectPg(session);
+  const sessionStore = new pgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: false,
+    ttl: sessionTtl,
+    tableName: "sessions"
+  });
+  return session({
+    secret: process.env.SESSION_SECRET,
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: true,
+      maxAge: sessionTtl
+    }
+  });
+}
+function updateUserSession(user, tokens) {
+  user.claims = tokens.claims();
+  user.access_token = tokens.access_token;
+  user.refresh_token = tokens.refresh_token;
+  user.expires_at = user.claims?.exp;
+}
+async function upsertUser(claims) {
+  await storage.upsertUser({
+    id: claims["sub"],
+    email: claims["email"],
+    firstName: claims["first_name"],
+    lastName: claims["last_name"],
+    profileImageUrl: claims["profile_image_url"]
+  });
+}
+async function setupAuth(app2) {
+  app2.set("trust proxy", 1);
+  app2.use(getSession());
+  app2.use(passport.initialize());
+  app2.use(passport.session());
+  const config = await getOidcConfig();
+  const verify = async (tokens, verified) => {
+    const user = {};
+    updateUserSession(user, tokens);
+    await upsertUser(tokens.claims());
+    verified(null, user);
+  };
+  const registeredStrategies = /* @__PURE__ */ new Set();
+  const ensureStrategy = (domain) => {
+    const strategyName = `replitauth:${domain}`;
+    if (!registeredStrategies.has(strategyName)) {
+      const strategy = new Strategy(
+        {
+          name: strategyName,
+          config,
+          scope: "openid email profile offline_access",
+          callbackURL: `https://${domain}/api/callback`
+        },
+        verify
+      );
+      passport.use(strategy);
+      registeredStrategies.add(strategyName);
+    }
+  };
+  passport.serializeUser((user, cb) => cb(null, user));
+  passport.deserializeUser((user, cb) => cb(null, user));
+  app2.get("/api/login", (req, res, next) => {
+    ensureStrategy(req.hostname);
+    passport.authenticate(`replitauth:${req.hostname}`, {
+      prompt: "login consent",
+      scope: ["openid", "email", "profile", "offline_access"]
+    })(req, res, next);
+  });
+  app2.get("/api/callback", (req, res, next) => {
+    ensureStrategy(req.hostname);
+    passport.authenticate(`replitauth:${req.hostname}`, {
+      successReturnToOrRedirect: "/",
+      failureRedirect: "/api/login"
+    })(req, res, next);
+  });
+  app2.get("/api/logout", (req, res) => {
+    req.logout(() => {
+      res.redirect(
+        client.buildEndSessionUrl(config, {
+          client_id: process.env.REPL_ID,
+          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`
+        }).href
+      );
+    });
+  });
+}
+var isAuthenticated = async (req, res, next) => {
+  const user = req.user;
+  if (!req.isAuthenticated() || !user.expires_at) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  const now = Math.floor(Date.now() / 1e3);
+  if (now <= user.expires_at) {
+    return next();
+  }
+  const refreshToken = user.refresh_token;
+  if (!refreshToken) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  try {
+    const config = await getOidcConfig();
+    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
+    updateUserSession(user, tokenResponse);
+    return next();
+  } catch (error) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+};
+
+// server/openai.ts
+import OpenAI from "openai";
+var openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+async function generateEventAnalysis(event, company, trial) {
+  const prompt = `You are an expert biotech analyst. Analyze the following clinical trial event and provide detailed insights.
+
+Event Information:
+- Title: ${event.title}
+- Type: ${event.type}
+- Date: ${new Date(event.dateUtc).toLocaleDateString()}
+- Company: ${company?.name || "Unknown"}
+- Therapeutic Area: ${event.therapeuticArea || "Not specified"}
+${trial ? `- Trial Phase: ${trial.phase || "Not specified"}
+- Trial Design: ${trial.design || "Not specified"}
+- Endpoints: ${trial.endpoints?.join(", ") || "Not specified"}` : ""}
+
+Provide your analysis in JSON format with:
+1) A 2-3 sentence plain-English summary explaining the event's significance
+2) An array of 3-5 key factors or endpoints to watch
+3) Three scenarios (Bull, Base, Bear) with:
+   - name: "Bull", "Base", or "Bear"
+   - prob: probability between 0 and 1 (must sum to 1.0)
+   - narrative: 3-sentence rationale for this scenario
+   - priceTarget: estimated stock price target for this scenario (use current baseline of $100)
+   - pricePath: array of 30 daily price points showing price evolution (each with date and price)
+4) confidence: your confidence score between 0 and 1
+
+Guidelines:
+- Bull scenario: positive outcome, approval likely, strong efficacy
+- Base scenario: moderate outcome, conditional approval or mixed results  
+- Bear scenario: negative outcome, trial failure, or significant concerns
+- Price paths should start from $100 and diverge based on scenario
+- Do not provide legal or medical advice
+- Mark limitations clearly
+
+Respond ONLY with valid JSON matching this structure:
+{
+  "summary": "string",
+  "keyFactors": ["string", "string", ...],
+  "scenarios": [
+    {
+      "name": "Bull",
+      "prob": 0.25,
+      "narrative": "string",
+      "priceTarget": 120,
+      "pricePath": [{"date": "2025-01-20", "price": 100}, ...]
+    },
+    ...
+  ],
+  "confidence": 0.78
+}`;
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-5",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert biotech and pharmaceutical industry analyst specializing in clinical trials, FDA approvals, and market forecasting."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 8192
+    });
+    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const baseDate = new Date(event.dateUtc);
+    const scenarios = result.scenarios.map((scenario) => {
+      if (!scenario.pricePath || scenario.pricePath.length === 0) {
+        scenario.pricePath = generatePricePath(baseDate, scenario.priceTarget || 100);
+      }
+      return scenario;
+    });
+    return {
+      summary: result.summary || "Analysis not available",
+      keyFactors: result.keyFactors || [],
+      scenarios,
+      confidence: Math.max(0, Math.min(1, result.confidence || 0.7))
+    };
+  } catch (error) {
+    console.error("Error generating AI analysis:", error);
+    throw new Error("Failed to generate AI analysis");
+  }
+}
+function generatePricePath(startDate, targetPrice) {
+  const path3 = [];
+  const basePrice = 100;
+  const days = 30;
+  for (let i = 0; i <= days; i++) {
+    const date = new Date(startDate);
+    date.setDate(date.getDate() + i);
+    const progress = i / days;
+    const price = basePrice + (targetPrice - basePrice) * progress;
+    const volatility = 0.02;
+    const randomFactor = 1 + (Math.random() - 0.5) * volatility;
+    path3.push({
+      date: date.toISOString().split("T")[0],
+      price: parseFloat((price * randomFactor).toFixed(2))
+    });
+  }
+  return path3;
+}
+
+// shared/schema.ts
+import { z } from "zod";
+var insertCompanySchema = z.object({
+  name: z.string(),
+  tickers: z.array(z.string()),
+  marketCap: z.string().optional(),
+  sector: z.string().optional(),
+  website: z.string().optional(),
+  logoUrl: z.string().optional()
+});
+var insertTrialSchema = z.object({
+  nctId: z.string().optional(),
+  title: z.string(),
+  phase: z.string().optional(),
+  design: z.string().optional(),
+  endpoints: z.array(z.string()).optional(),
+  enrollment: z.number().optional(),
+  locations: z.array(z.string()).optional(),
+  companyId: z.string().optional()
+});
+var insertEventSchema = z.object({
+  title: z.string(),
+  type: z.string(),
+  dateUtc: z.date(),
+  sourceLinks: z.array(z.string()).optional(),
+  nctId: z.string().optional(),
+  companyId: z.string().optional(),
+  relatedTickers: z.array(z.string()).optional(),
+  status: z.string(),
+  therapeuticArea: z.string().optional(),
+  description: z.string().optional()
+});
+var insertAiAnalysisSchema = z.object({
+  eventId: z.string(),
+  summary: z.string(),
+  keyFactors: z.array(z.string()).optional(),
+  scenarios: z.any(),
+  // JSONB
+  confidence: z.number(),
+  modelVersion: z.string(),
+  sourcesUsed: z.array(z.string()).optional()
+});
+var insertWatchlistItemSchema = z.object({
+  userId: z.string(),
+  eventId: z.string().optional(),
+  companyId: z.string().optional()
+});
+
+// server/routes.ts
+async function registerRoutes(app2) {
+  await setupAuth(app2);
+  app2.get("/api/auth/user", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+  app2.get("/api/companies", async (req, res) => {
+    try {
+      const companies = await storage.getCompanies();
+      res.json(companies);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+      res.status(500).json({ message: "Failed to fetch companies" });
+    }
+  });
+  app2.get("/api/companies/:id", async (req, res) => {
+    try {
+      const company = await storage.getCompany(req.params.id);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+      res.json(company);
+    } catch (error) {
+      console.error("Error fetching company:", error);
+      res.status(500).json({ message: "Failed to fetch company" });
+    }
+  });
+  app2.get("/api/events", async (req, res) => {
+    try {
+      const filters = {
+        companyId: req.query.companyId,
+        status: req.query.status ? req.query.status.split(",") : void 0,
+        types: req.query.types ? req.query.types.split(",") : void 0,
+        dateFrom: req.query.dateFrom,
+        dateTo: req.query.dateTo
+      };
+      const events = await storage.getEvents(filters);
+      res.json(events);
+    } catch (error) {
+      console.error("Error fetching events:", error);
+      res.status(500).json({ message: "Failed to fetch events" });
+    }
+  });
+  app2.get("/api/events/:id", async (req, res) => {
+    try {
+      const event = await storage.getEvent(req.params.id);
+      if (!event) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+      res.json(event);
+    } catch (error) {
+      console.error("Error fetching event:", error);
+      res.status(500).json({ message: "Failed to fetch event" });
+    }
+  });
+  app2.get("/api/ai-analysis/:eventId", async (req, res) => {
+    try {
+      const analysis = await storage.getAiAnalysis(req.params.eventId);
+      if (!analysis) {
+        return res.status(404).json({ message: "Analysis not found" });
+      }
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error fetching AI analysis:", error);
+      res.status(500).json({ message: "Failed to fetch AI analysis" });
+    }
+  });
+  app2.post("/api/ai-analysis/:eventId", isAuthenticated, async (req, res) => {
+    try {
+      const eventId = req.params.eventId;
+      const existingAnalysis = await storage.getAiAnalysis(eventId);
+      if (existingAnalysis) {
+        return res.json(existingAnalysis);
+      }
+      const event = await storage.getEvent(eventId);
+      if (!event) {
+        return res.status(404).json({ message: "Event not found" });
+      }
+      const company = event.companyId ? await storage.getCompany(event.companyId) : void 0;
+      const trial = event.nctId ? await storage.getTrialByNctId(event.nctId) : void 0;
+      const analysisData = await generateEventAnalysis(event, company, trial);
+      const analysis = await storage.createAiAnalysis({
+        eventId,
+        summary: analysisData.summary,
+        keyFactors: analysisData.keyFactors,
+        scenarios: analysisData.scenarios,
+        confidence: analysisData.confidence,
+        modelVersion: "gpt-5-analysis-v1.0",
+        sourcesUsed: ["clinicaltrials.gov", "fda.gov", "event_metadata"]
+      });
+      res.json(analysis);
+    } catch (error) {
+      console.error("Error generating AI analysis:", error);
+      res.status(500).json({ message: "Failed to generate AI analysis" });
+    }
+  });
+  app2.get("/api/watchlist", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const items = await storage.getWatchlistItems(userId);
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching watchlist:", error);
+      res.status(500).json({ message: "Failed to fetch watchlist" });
+    }
+  });
+  app2.post("/api/watchlist", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const validation = insertWatchlistItemSchema.safeParse({ ...req.body, userId });
+      if (!validation.success) {
+        return res.status(400).json({ message: "Invalid request data", errors: validation.error.errors });
+      }
+      if (validation.data.eventId) {
+        const existing = await storage.getWatchlistItem(userId, validation.data.eventId);
+        if (existing) {
+          return res.status(200).json(existing);
+        }
+      }
+      const item = await storage.createWatchlistItem(validation.data);
+      res.json(item);
+    } catch (error) {
+      console.error("Error adding to watchlist:", error);
+      res.status(500).json({ message: "Failed to add to watchlist" });
+    }
+  });
+  app2.delete("/api/watchlist/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteWatchlistItem(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing from watchlist:", error);
+      res.status(500).json({ message: "Failed to remove from watchlist" });
+    }
+  });
+  const httpServer = createServer(app2);
+  return httpServer;
+}
+
+// server/vite.ts
+import express from "express";
+import fs from "fs";
+import path2 from "path";
+import { createServer as createViteServer, createLogger } from "vite";
+
+// vite.config.ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import path from "path";
+import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+var vite_config_default = defineConfig({
+  plugins: [
+    react(),
+    runtimeErrorOverlay(),
+    ...process.env.NODE_ENV !== "production" && process.env.REPL_ID !== void 0 ? [
+      await import("@replit/vite-plugin-cartographer").then(
+        (m) => m.cartographer()
+      ),
+      await import("@replit/vite-plugin-dev-banner").then(
+        (m) => m.devBanner()
+      )
+    ] : []
+  ],
+  resolve: {
+    alias: {
+      "@": path.resolve(import.meta.dirname, "client", "src"),
+      "@shared": path.resolve(import.meta.dirname, "shared"),
+      "@assets": path.resolve(import.meta.dirname, "attached_assets")
+    }
+  },
+  root: path.resolve(import.meta.dirname, "client"),
+  build: {
+    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    emptyOutDir: true
+  },
+  server: {
+    fs: {
+      strict: true,
+      deny: ["**/.*"]
+    }
+  }
+});
+
+// server/vite.ts
+import { nanoid } from "nanoid";
+var viteLogger = createLogger();
+function log(message, source = "express") {
+  const formattedTime = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  });
+  console.log(`${formattedTime} [${source}] ${message}`);
+}
+async function setupVite(app2, server) {
+  const serverOptions = {
+    middlewareMode: true,
+    hmr: { server },
+    allowedHosts: true
+  };
+  const vite = await createViteServer({
+    ...vite_config_default,
+    configFile: false,
+    customLogger: {
+      ...viteLogger,
+      error: (msg, options) => {
+        viteLogger.error(msg, options);
+        process.exit(1);
+      }
+    },
+    server: serverOptions,
+    appType: "custom"
+  });
+  app2.use(vite.middlewares);
+  app2.use("*", async (req, res, next) => {
+    const url = req.originalUrl;
+    try {
+      const clientTemplate = path2.resolve(
+        import.meta.dirname,
+        "..",
+        "client",
+        "index.html"
+      );
+      let template = await fs.promises.readFile(clientTemplate, "utf-8");
+      template = template.replace(
+        `src="/src/main.tsx"`,
+        `src="/src/main.tsx?v=${nanoid()}"`
+      );
+      const page = await vite.transformIndexHtml(url, template);
+      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+    } catch (e) {
+      vite.ssrFixStacktrace(e);
+      next(e);
+    }
+  });
+}
+function serveStatic(app2) {
+  const distPath = path2.resolve(import.meta.dirname, "public");
+  if (!fs.existsSync(distPath)) {
+    throw new Error(
+      `Could not find the build directory: ${distPath}, make sure to build the client first`
+    );
+  }
+  app2.use(express.static(distPath));
+  app2.use("*", (_req, res) => {
+    res.sendFile(path2.resolve(distPath, "index.html"));
+  });
+}
+
+// server/seed.ts
+async function seedDatabase() {
+  console.log("Seeding database with sample biotech data...");
+  const companies = [
+    {
+      name: "BioNova Therapeutics",
+      tickers: ["BNOV"],
+      marketCap: "$2.4B",
+      sector: "Oncology",
+      website: "https://bionova.example.com"
+    },
+    {
+      name: "GeneTech Solutions",
+      tickers: ["GTSOL"],
+      marketCap: "$5.8B",
+      sector: "Gene Therapy",
+      website: "https://genetech.example.com"
+    },
+    {
+      name: "NeuroPharm Inc",
+      tickers: ["NPHM"],
+      marketCap: "$1.2B",
+      sector: "Neurology",
+      website: "https://neuropharm.example.com"
+    },
+    {
+      name: "CardioLife Biotech",
+      tickers: ["CLBT"],
+      marketCap: "$3.6B",
+      sector: "Cardiovascular",
+      website: "https://cardiolife.example.com"
+    },
+    {
+      name: "ImmunoCure Pharma",
+      tickers: ["ICPH"],
+      marketCap: "$4.2B",
+      sector: "Immunology",
+      website: "https://immunocure.example.com"
+    }
+  ];
+  const createdCompanies = [];
+  for (const company of companies) {
+    const created = await storage.createCompany(company);
+    createdCompanies.push(created);
+  }
+  console.log(`Created ${createdCompanies.length} companies`);
+  const baseDate = /* @__PURE__ */ new Date();
+  const events = [
+    {
+      title: "FDA Advisory Committee Meeting: BNV-401 for Advanced Melanoma",
+      type: "advisory_committee",
+      dateUtc: new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1e3),
+      // 7 days from now
+      nctId: "NCT05234567",
+      relatedTickers: ["BNOV"],
+      status: "upcoming",
+      therapeuticArea: "Oncology",
+      description: "FDA Oncologic Drugs Advisory Committee will review BioNova's BNV-401, a novel checkpoint inhibitor for advanced melanoma treatment. Phase 3 trial showed 42% objective response rate.",
+      sourceLinks: ["https://fda.gov/advisorycommittee/2025/melanoma"]
+    },
+    {
+      title: "PDUFA Date: GeneTech's GT-2890 Gene Therapy for SMA",
+      type: "pdufa",
+      dateUtc: new Date(baseDate.getTime() + 21 * 24 * 60 * 60 * 1e3),
+      // 21 days from now
+      nctId: "NCT05123456",
+      relatedTickers: ["GTSOL"],
+      status: "upcoming",
+      therapeuticArea: "Rare Genetic Diseases",
+      description: "FDA decision deadline for GT-2890, a one-time gene therapy for spinal muscular atrophy. Breakthrough therapy designation granted.",
+      sourceLinks: ["https://fda.gov/pdufa/2025/sma-therapy"]
+    },
+    {
+      title: "Phase 3 Data Readout: NP-5501 for Alzheimer's Disease",
+      type: "readout",
+      dateUtc: new Date(baseDate.getTime() + 14 * 24 * 60 * 60 * 1e3),
+      // 14 days from now
+      nctId: "NCT05345678",
+      relatedTickers: ["NPHM"],
+      status: "upcoming",
+      therapeuticArea: "Neurology",
+      description: "Top-line results from Phase 3 CLARITY trial evaluating NP-5501 in early Alzheimer's disease. Primary endpoint: cognitive decline measured by CDR-SB score.",
+      sourceLinks: ["https://clinicaltrials.gov/NCT05345678"]
+    },
+    {
+      title: "NDA Submission: CardioLife's CL-788 for Heart Failure",
+      type: "nda_bla",
+      dateUtc: new Date(baseDate.getTime() + 3 * 24 * 60 * 60 * 1e3),
+      // 3 days from now
+      nctId: "NCT05456789",
+      relatedTickers: ["CLBT"],
+      status: "upcoming",
+      therapeuticArea: "Cardiovascular",
+      description: "New Drug Application submission for CL-788, a novel SGLT2 inhibitor for chronic heart failure with reduced ejection fraction.",
+      sourceLinks: ["https://cardiolife.example.com/press/nda-submission"]
+    },
+    {
+      title: "Phase 2 Results: IC-2200 for Rheumatoid Arthritis",
+      type: "phase_result",
+      dateUtc: new Date(baseDate.getTime() + 28 * 24 * 60 * 60 * 1e3),
+      // 28 days from now
+      nctId: "NCT05567890",
+      relatedTickers: ["ICPH"],
+      status: "upcoming",
+      therapeuticArea: "Immunology",
+      description: "Interim Phase 2 data for IC-2200, a bi-specific antibody targeting IL-6 and TNF-alpha in moderate-to-severe rheumatoid arthritis patients.",
+      sourceLinks: ["https://clinicaltrials.gov/NCT05567890"]
+    },
+    {
+      title: "FDA Advisory Committee: BNV-305 Breast Cancer Therapy",
+      type: "advisory_committee",
+      dateUtc: new Date(baseDate.getTime() + 35 * 24 * 60 * 60 * 1e3),
+      // 35 days from now
+      nctId: "NCT05678901",
+      relatedTickers: ["BNOV"],
+      status: "upcoming",
+      therapeuticArea: "Oncology",
+      description: "Advisory committee review of BNV-305 antibody-drug conjugate for HER2-positive metastatic breast cancer. Fast track designation received.",
+      sourceLinks: ["https://fda.gov/advisorycommittee/2025/breast-cancer"]
+    },
+    {
+      title: "PDUFA Date: NeuroPharm's NP-4401 Parkinson's Treatment",
+      type: "pdufa",
+      dateUtc: new Date(baseDate.getTime() + 42 * 24 * 60 * 60 * 1e3),
+      // 42 days from now
+      nctId: "NCT05789012",
+      relatedTickers: ["NPHM"],
+      status: "upcoming",
+      therapeuticArea: "Neurology",
+      description: "FDA action date for NP-4401, an oral dopamine agonist for early-stage Parkinson's disease. Priority review granted.",
+      sourceLinks: ["https://fda.gov/pdufa/2025/parkinsons"]
+    },
+    {
+      title: "Phase 3 Readout: GT-3100 Hemophilia B Gene Therapy",
+      type: "readout",
+      dateUtc: new Date(baseDate.getTime() + 49 * 24 * 60 * 60 * 1e3),
+      // 49 days from now
+      nctId: "NCT05890123",
+      relatedTickers: ["GTSOL"],
+      status: "upcoming",
+      therapeuticArea: "Rare Genetic Diseases",
+      description: "Phase 3 HOPE-B trial results for GT-3100, a single-dose AAV gene therapy for hemophilia B. Primary endpoint: Factor IX activity levels.",
+      sourceLinks: ["https://clinicaltrials.gov/NCT05890123"]
+    }
+  ];
+  let eventCount = 0;
+  for (let i = 0; i < events.length; i++) {
+    const companyIndex = i % createdCompanies.length;
+    const event = await storage.createEvent({
+      ...events[i],
+      companyId: createdCompanies[companyIndex].id
+    });
+    eventCount++;
+  }
+  console.log(`Created ${eventCount} events`);
+  console.log("Database seeding complete!");
+}
+
+// server/index.ts
+var app = express2();
+app.use(express2.json({
+  verify: (req, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
+app.use(express2.urlencoded({ extended: false }));
+app.use((req, res, next) => {
+  const start = Date.now();
+  const path3 = req.path;
+  let capturedJsonResponse = void 0;
+  const originalResJson = res.json;
+  res.json = function(bodyJson, ...args) {
+    capturedJsonResponse = bodyJson;
+    return originalResJson.apply(res, [bodyJson, ...args]);
+  };
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (path3.startsWith("/api")) {
+      let logLine = `${req.method} ${path3} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "\u2026";
+      }
+      log(logLine);
+    }
+  });
+  next();
+});
+(async () => {
+  const server = await registerRoutes(app);
+  app.use((err, _req, res, _next) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+    res.status(status).json({ message });
+    throw err;
+  });
+  if (app.get("env") === "development") {
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
+  }
+  if (app.get("env") === "development") {
+    try {
+      await seedDatabase();
+    } catch (error) {
+      log("Warning: Database seeding failed (may already be seeded)");
+    }
+  }
+  const port = parseInt(process.env.PORT || "5000", 10);
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true
+  }, () => {
+    log(`serving on port ${port}`);
+  });
+})();

@@ -1,14 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-if (!process.env.SUPABASE_URL) {
-  throw new Error("SUPABASE_URL must be set. Did you forget to add it to secrets?");
-}
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
 
-if (!process.env.SUPABASE_ANON_KEY) {
-  throw new Error("SUPABASE_ANON_KEY must be set. Did you forget to add it to secrets?");
-}
-
-export const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+export const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
